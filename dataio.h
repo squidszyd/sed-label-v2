@@ -21,7 +21,8 @@ bool _readData(const QString& path, QVector<QVector<Box>>& box_list, float conf_
 	try {
 		while (ifs.read((char*)&fid, sizeof(int))) {
 			ifs.read((char*)&num, sizeof(int));
-			box_list.push_back(QVector<Box>());
+			while (box_list.size() <= fid)
+				box_list.push_back(QVector<Box>());
 			for (int i = 0; i < num; ++i) {
 				ifs.read((char*)&box._x1, sizeof(int));
 				ifs.read((char*)&box._y1, sizeof(int));

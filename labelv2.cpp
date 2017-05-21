@@ -400,7 +400,7 @@ void LabelV2::fetchMouseContent(QMouseEvent* event) {
 		else {
 			_lab_curr_box_class->setText(QString("[CLS] %1").arg(pbox->_class));
 			_lab_curr_box_confidence->setText(QString("[CONF] ") + QString::number(pbox->_confidence, 'f', 3));
-			_lab_curr_box_coord->setText(QString("[COORD] (%1, %2), (%3, %4)").
+			_lab_curr_box_coord->setText(QString("[COORD] (X1: %1, Y1: %2), (X2: %3, Y2: %4)").
 				arg(pbox->_x1).arg(pbox->_y1).arg(pbox->_x2).arg(pbox->_y2));
 		}
 	}
@@ -542,7 +542,7 @@ void LabelV2::openDetectionFile() {
 		QMessageBox::warning(this, tr("Error"), tr("Error reading file: broken file"));
 		return;
 	}
-	if (box_list.size() != _total_frame_num) {
+	if (box_list.size() > _total_frame_num) {
 		QMessageBox::warning(this, tr("Error"), tr("Error reading file: unmatched video and detection result"));
 		return;
 	}
@@ -723,16 +723,10 @@ void LabelV2::onBtnPrevEvent() {
 		if (_model_events->data(index, Qt::CheckStateRole) == Qt::Unchecked)
 			continue;
 		auto& lst = _event_list[it.key()];
-		int count = lst.count(), lo(0), hi(count - 1), mid, last_found = -1;
-		while (lo <= hi) {
-			mid = (lo + hi) >> 1;
-			if (lst[mid]._start_fid >= _curr_frame_id)
-				hi = mid - 1;
-			if (lst[mid]._start_fid < _curr_frame_id) {
-				if (_model_events->data(_model_events->index(mid, 0, index), Qt::CheckStateRole) == Qt::Checked)
-					last_found = mid;
-				lo = mid + 1;
-			}
+		int count = lst.count(), last_found = -1;
+		for (int i = 0; i < count; ++i) {
+			if (lst[i]._start_fid >= _curr_frame_id)	break;
+			if (_model_events->data(_model_events->index(i, 0, index), Qt::CheckStateRole) == Qt::Checked)	last_found = i;
 		}
 		if (last_found != -1)
 			max_start_fid = max(max_start_fid, lst[last_found]._start_fid);
@@ -749,16 +743,10 @@ void LabelV2::onBtnNextEvent() {
 		if (_model_events->data(index, Qt::CheckStateRole) == Qt::Unchecked)
 			continue;
 		auto& lst = _event_list[it.key()];
-		int count = lst.count(), lo(0), hi(count - 1), mid, last_found = -1;
-		while (lo <= hi) {
-			mid = (lo + hi) >> 1;
-			if (lst[mid]._start_fid <= _curr_frame_id)
-				lo =  mid + 1;
-			if (lst[mid]._start_fid > _curr_frame_id) {
-				if (_model_events->data(_model_events->index(mid, 0, index), Qt::CheckStateRole) == Qt::Checked)
-					last_found = mid;
-				hi = mid - 1;
-			}
+		int count = lst.count(), last_found = -1;
+		for (int i = count - 1; i >= 0; --i) {
+			if (lst[i]._start_fid <= _curr_frame_id)	break;
+			if (_model_events->data(_model_events->index(i, 0, index), Qt::CheckStateRole) == Qt::Checked)	last_found = i;
 		}
 		if (last_found != -1)
 			min_start_fid = min(min_start_fid, lst[last_found]._start_fid);
