@@ -63,6 +63,7 @@ LabelV2::LabelV2(QWidget *parent) :
 	_lab_curr_box_coord = new QLabel(tr(" "), this);
 	_lab_curr_box_confidence = new QLabel(tr(" "), this);
 	_lab_curr_box_class = new QLabel(tr(" "), this);
+	_lab_on_going_events = new QLabel(tr(" "), this);
 	_lab_box_class = new QLabel(tr("Box class"), this);
 	_lab_detction_confidence_threshold = new QLabel(tr("Confidence"), this);
 	_lab_box_list = new QLabel(tr("Box list"), this);
@@ -76,6 +77,7 @@ LabelV2::LabelV2(QWidget *parent) :
 	statusBar()->addWidget(_lab_curr_box_coord);
 	statusBar()->addWidget(_lab_curr_box_confidence);
 	statusBar()->addWidget(_lab_curr_box_class);
+	statusBar()->addWidget(_lab_on_going_events);
 
 	connect(this, SIGNAL(videoFileChanged()),
 		this, SLOT(onVideoFileChanged()));
@@ -380,6 +382,7 @@ void LabelV2::jumpToFrame(int fid) {
 	_sldr_video_progress->setValue(_curr_frame_id);
 
 	drawImg(_curr_frame);
+	findOnGoingEvent();
 }
 
 void LabelV2::fetchMouseContent(QMouseEvent* event) {
@@ -429,6 +432,7 @@ void LabelV2::resetVideoRelatedVar() {
 	_lab_curr_box_confidence->setText(tr(" "));
 	_lab_curr_box_coord->setText(tr(" "));
 	_lab_curr_box_confidence->setText(tr(" "));
+	_lab_on_going_events->setText(tr(" "));
 
 	_btn_open_detection->setEnabled(true);
 	_btn_open_track->setEnabled(true);
@@ -676,6 +680,7 @@ void LabelV2::onBtnStop() {
 	_lab_curr_box_confidence->setText(tr(" "));
 	_lab_curr_box_coord->setText(tr(" "));
 	_lab_curr_box_confidence->setText(tr(" "));
+	_lab_on_going_events->setText(tr(" "));
 
 	_act_open_detection->setEnabled(false);
 	_act_open_track->setEnabled(false);
@@ -703,6 +708,7 @@ void LabelV2::onBtnPrevFrame() {
 	_lab_curr_frame_id->setText(QString::number(_curr_frame_id));
 	_sldr_video_progress->setSliderPosition(_curr_frame_id);
 	drawImg(_curr_frame);
+	findOnGoingEvent();
 }
 
 void LabelV2::onBtnNextFrame() {
@@ -713,6 +719,7 @@ void LabelV2::onBtnNextFrame() {
 	_lab_curr_frame_id->setText(QString::number(_curr_frame_id));
 	_sldr_video_progress->setSliderPosition(_curr_frame_id);
 	drawImg(_curr_frame);
+	findOnGoingEvent();
 }
 
 void LabelV2::onBtnPrevEvent() {
@@ -834,6 +841,7 @@ void LabelV2::playOneFrame() {
 	_lab_curr_frame_id->setText(QString::number(_curr_frame_id));
 	_sldr_video_progress->setSliderPosition(_curr_frame_id);
 	drawImg(_curr_frame);
+	findOnGoingEvent();
 }
 
 const Box* LabelV2::findNearestBox(int x, int y) const {
@@ -851,4 +859,17 @@ const Box* LabelV2::findNearestBox(int x, int y) const {
 		}
 	}
 	return pbox;
+}
+
+void LabelV2::findOnGoingEvent() {
+	QString str_on_going_events = " ";
+	for (const auto& event_list : _event_list) {
+		for (const auto& evt : event_list) {
+			if (evt._start_fid > _curr_frame_id)	break;
+			if (evt._end_fid < _curr_frame_id) continue;
+			str_on_going_events += QString(" [%1] ").arg(evt._name);
+			break;
+		}
+	}
+	_lab_on_going_events->setText(str_on_going_events);
 }

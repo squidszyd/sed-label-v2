@@ -46,6 +46,7 @@ protected:
 	void drawBoxes(cv::Mat& img);
 	void drawTracks(cv::Mat& img);
 	const Box* findNearestBox(int x, int y) const;
+	void findOnGoingEvent();
 	void jumpToFrame(int fid);
 	void readSettings();
 	void resizeEvent(QResizeEvent* event);
@@ -161,6 +162,8 @@ private:
 	QLabel* _lab_curr_box_confidence;
 	QLabel* _lab_curr_box_coord;
 	QLabel* _lab_curr_box_class;
+
+	QLabel* _lab_on_going_events;
 
 	QLabel* _lab_box_class;
 	QLabel* _lab_detction_confidence_threshold;
