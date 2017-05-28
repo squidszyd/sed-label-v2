@@ -47,6 +47,30 @@ bool _readData(const QString& path, QVector<QVector<Box>>& box_list, float conf_
 
 bool _readDtm(const QString& path, QVector<QVector<Box>>& box_list) {
 	return false;
+	box_list.clear();
+	ifstream ifs(path.toStdString(), std::ios::binary);
+	if (!ifs.is_open())
+		return false;
+	Box box;
+	try {
+		while (ifs.read((char*)&box._fid, sizeof(int))) {
+			ifs.read((char*)&box._confidence, sizeof(float));
+			ifs.read((char*)&box._class, sizeof(int));
+			ifs.read((char*)&box._x1, sizeof(int));
+			ifs.read((char*)&box._y1, sizeof(int));
+			ifs.read((char*)&box._x2, sizeof(int));
+			ifs.read((char*)&box._y2, sizeof(int));
+			while (box_list.size() <= box._fid)
+				box_list.push_back(QVector<Box>());
+			box_list[box._fid] << box;
+		}
+	}
+	catch (...) {
+		box_list.clear();
+		return false;
+	}
+	ifs.close();
+	return true;
 }
 
 bool _readFusedTrack(const QString& path, QVector<Track>& track_list) {
