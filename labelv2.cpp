@@ -49,23 +49,28 @@ LabelV2::LabelV2(QWidget *parent) :
 	_act_open_event->setEnabled(false);
 	connect(_act_open_event, SIGNAL(triggered()), this, SLOT(openEventFile()));
 
+	_act_save_result = new QAction(tr("&Open event"), this);
+	_act_save_result->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_S));
+	_act_save_result->setEnabled(false);
+	connect(_act_save_result, SIGNAL(triggered()), this, SLOT(saveLabelResult()));
+
 	QMenu* file = menuBar()->addMenu(tr("&File"));
 	file->addAction(_act_open_video);
 	file->addAction(_act_open_detection);
 	file->addAction(_act_open_track);
 	file->addAction(_act_open_event);
+	file->addAction(_act_save_result);
 
 	_lab_curr_frame_id = new QLabel(tr(" "), this);
 	_lab_curr_frame_id->setMinimumWidth(30);
 	_lab_total_frame_id = new QLabel(tr(" "), this);
 	_lab_total_frame_id->setMinimumWidth(30);
 
-	_lab_curr_box_coord = new QLabel(tr(" "), this);
-	_lab_curr_box_confidence = new QLabel(tr(" "), this);
-	_lab_curr_box_class = new QLabel(tr(" "), this);
+	_lab_curr_box_info = new QLabel(tr(" "), this);
 	_lab_on_going_events = new QLabel(tr(" "), this);
-	_lab_box_class = new QLabel(tr("Box class"), this);
-	_lab_detction_confidence_threshold = new QLabel(tr("Confidence"), this);
+	_lab_box_class = new QLabel(tr("Cls"), this);
+	_lab_jump_interval = new QLabel(tr("Step"), this);
+	_lab_detction_confidence_threshold = new QLabel(tr("ConfTH"), this);
 	_lab_box_list = new QLabel(tr("Box list"), this);
 	_lab_box_list->setMaximumHeight(10);
 	_lab_track_list = new QLabel(tr("Track list"), this);
@@ -74,9 +79,7 @@ LabelV2::LabelV2(QWidget *parent) :
 	_lab_event_list->setMaximumHeight(10);
 
 	statusBar();
-	statusBar()->addWidget(_lab_curr_box_coord);
-	statusBar()->addWidget(_lab_curr_box_confidence);
-	statusBar()->addWidget(_lab_curr_box_class);
+	statusBar()->addWidget(_lab_curr_box_info);
 	statusBar()->addWidget(_lab_on_going_events);
 
 	connect(this, SIGNAL(videoFileChanged()),
@@ -100,6 +103,11 @@ LabelV2::LabelV2(QWidget *parent) :
 	_btn_open_event->setEnabled(false);
 	connect(_btn_open_event, SIGNAL(clicked()),
 		this, SLOT(openEventFile()));
+
+	_btn_save_label_result = new QPushButton(tr("Save"), this);
+	_btn_save_label_result->setEnabled(false);
+	connect(_btn_save_label_result, SIGNAL(clicked()),
+		this, SLOT(saveLabelResult()));
 
 	_btn_play = new QPushButton(this);
 	_btn_play->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
@@ -128,6 +136,20 @@ LabelV2::LabelV2(QWidget *parent) :
 	connect(_btn_prev_frame, SIGNAL(clicked()),
 		this, SLOT(onBtnPrevFrame()));
 
+	_btn_next_frame_with_box = new QPushButton(tr(">"), this);
+	_btn_next_frame_with_box->setEnabled(false);
+	_btn_next_frame_with_box->setShortcut(QKeySequence(Qt::ALT + Qt::Key_Period));
+	_btn_next_frame_with_box->setToolTip(tr("next frame with boxes"));
+	connect(_btn_next_frame_with_box, SIGNAL(clicked()),
+		this, SLOT(onBtnNextFrameWithBox()));
+
+	_btn_prev_frame_with_box = new QPushButton(tr("<"), this);
+	_btn_prev_frame_with_box->setEnabled(false);
+	_btn_prev_frame_with_box->setShortcut(QKeySequence(Qt::ALT + Qt::Key_Comma));
+	_btn_prev_frame_with_box->setToolTip(tr("previous frame with boxes"));
+	connect(_btn_prev_frame_with_box, SIGNAL(clicked()),
+		this, SLOT(onBtnPrevFrameWithBox()));
+
 	_btn_prev_event = new QPushButton(tr("<<"), this);
 	_btn_prev_event->setEnabled(false);
 	_btn_prev_event->setShortcut(QKeySequence(Qt::Key_B));
@@ -153,6 +175,8 @@ LabelV2::LabelV2(QWidget *parent) :
 	_img_label->setMinimumWidth(720);
 	connect(_img_label, SIGNAL(mouseMoved(QMouseEvent*)),
 		this, SLOT(fetchMouseContent(QMouseEvent*)));
+	connect(_img_label, SIGNAL(mouseClicked(QMouseEvent*)),
+		this, SLOT(onMouseClickedImgLabel(QMouseEvent*)));
 
 	_chk_show_detection_result = new QCheckBox(tr("Det"), this);
 	connect(_chk_show_detection_result, SIGNAL(stateChanged(int)), 
@@ -165,6 +189,12 @@ LabelV2::LabelV2(QWidget *parent) :
 		this, SLOT(onCheckShowTracks(int)));
 	_show_tracks = true;
 	_chk_show_tracks->setChecked(true);
+
+	_chk_label_state = new QCheckBox(tr("Label"), this);
+	connect(_chk_label_state, SIGNAL(stateChanged(int)),
+		this, SLOT(onCheckLabelState(int)));
+	_label_state = false;
+	_chk_label_state->setChecked(false);
 
 	_spin_detection_confidence_threshold = new QDoubleSpinBox(this);
 	_spin_detection_confidence_threshold->setRange(0.0, 1.0);
@@ -182,6 +212,12 @@ LabelV2::LabelV2(QWidget *parent) :
 	_spin_box_class->setToolTip(tr("box class selection"));
 	connect(_spin_box_class, SIGNAL(valueChanged(int)),
 		this, SLOT(onChangingBoxClass(int)));
+
+	_spin_jump_interval = new QSpinBox(this);
+	_spin_jump_interval->setRange(1, 100);
+	_spin_jump_interval->setToolTip(tr("jump interval"));
+	connect(_spin_jump_interval, SIGNAL(valueChanged(int)),
+		this, SLOT(onChangingJumpInterval(int)));
 
 	_sldr_video_progress = new QSlider(Qt::Horizontal, this);
 	_sldr_video_progress->setEnabled(false);
@@ -263,21 +299,27 @@ void LabelV2::setUpLayout() {
 	fileLayout->addWidget(_btn_open_detection);
 	fileLayout->addWidget(_btn_open_track);
 	fileLayout->addWidget(_btn_open_event);
+	fileLayout->addWidget(_btn_save_label_result);
 
 	controlLayout->addWidget(_btn_prev_frame);
 	controlLayout->addWidget(_btn_play);
 	controlLayout->addWidget(_btn_stop);
 	controlLayout->addWidget(_btn_next_frame);
-	controlLayout->addSpacing(25);
+	controlLayout->addSpacing(10);
+	controlLayout->addWidget(_btn_prev_frame_with_box);
+	controlLayout->addWidget(_btn_next_frame_with_box);
 	controlLayout->addWidget(_btn_prev_event);
 	controlLayout->addWidget(_btn_next_event);
-	controlLayout->addSpacing(25);
+	controlLayout->addSpacing(10);
+	controlLayout->addWidget(_lab_jump_interval);
+	controlLayout->addWidget(_spin_jump_interval);
+	controlLayout->addSpacing(10);
 	controlLayout->addWidget(_chk_show_detection_result);
 	controlLayout->addWidget(_chk_show_tracks);
-	controlLayout->addSpacing(10);
+	controlLayout->addWidget(_chk_label_state);
+
 	controlLayout->addWidget(_lab_detction_confidence_threshold);
 	controlLayout->addWidget(_spin_detection_confidence_threshold);
-	controlLayout->addSpacing(10);
 	controlLayout->addWidget(_lab_box_class);
 	controlLayout->addWidget(_spin_box_class);
 
@@ -320,11 +362,13 @@ void LabelV2::closeEvent(QCloseEvent* event) {
 	_app_settings.setValue("labelv2/size", this->size());
 }
 
-void LabelV2::drawImg(cv::Mat& img) {
+void LabelV2::drawImg(cv::Mat& img, QPointF* cursor) {
 	if (img.empty())	return;
 
 	Mat im_copy;
 	img.copyTo(im_copy);
+
+	if (_label_state && cursor != nullptr) drawGuideLines(im_copy, cursor);
 
 	if (!_box_list.empty() && _show_detection_result)
 		drawBoxes(im_copy);
@@ -370,6 +414,16 @@ void LabelV2::drawTracks(cv::Mat& img) {
 	}
 }
 
+void LabelV2::drawGuideLines(cv::Mat& img, QPointF* cursor) {
+	auto line_color = cv::Scalar(247, 251, 100);
+	cv::line(img, cv::Point(0, cursor->y()), cv::Point(_frame_width - 1, cursor->y()), line_color, 1);
+	cv::line(img, cv::Point(cursor->x(), 0), cv::Point(cursor->x(), _frame_height - 1), line_color, 1);
+	if (_label_point.size() == 1) {
+		const auto& pt = _label_point[0];
+		cv::rectangle(img, cv::Point(cursor->x(), cursor->y()), cv::Point(pt.x(), pt.y()), line_color, 2, CV_AA);
+	}
+}
+
 void LabelV2::jumpToFrame(int fid) {
 	if (_is_playing)	onBtnPlay();
 	if (fid < 0 || fid >= _total_frame_num)
@@ -394,20 +448,64 @@ void LabelV2::fetchMouseContent(QMouseEvent* event) {
 			QString::number(int(img_pt.y())),
 			this, rect());
 
-		const auto* pbox = findNearestBox(img_pt.x(), img_pt.y());
-		if (pbox == nullptr) {
-			_lab_curr_box_class->setText(tr(" "));
-			_lab_curr_box_confidence->setText(tr(" "));
-			_lab_curr_box_coord->setText(tr(" "));
+		if (_label_state) {
+			// draw guide lines
+			drawImg(_curr_frame, &img_pt);
+		}
+
+		int index = findNearestBox(img_pt.x(), img_pt.y());
+		if (index == -1) {
+			_lab_curr_box_info->setText(tr(" "));
 		}
 		else {
-			_lab_curr_box_class->setText(QString("[CLS] %1").arg(pbox->_class));
-			_lab_curr_box_confidence->setText(QString("[CONF] ") + QString::number(pbox->_confidence, 'f', 3));
-			_lab_curr_box_coord->setText(QString("[COORD] (X1: %1, Y1: %2), (X2: %3, Y2: %4)").
-				arg(pbox->_x1).arg(pbox->_y1).arg(pbox->_x2).arg(pbox->_y2));
+			const auto& box = _box_list[_curr_frame_id][index];
+			int cx = (box._x1 + box._x2) >> 1;
+			int cy = (box._y1 + box._y2) >> 1;
+			int width = box._x2 - box._x1;
+			int height = box._y2 - box._y1;
+			QString info = QString("[CLS] %1  [CONF] %2  [COORD] (X1:%3, Y1:%4), (X2:%5, Y2:%6)  [C] (CX:%7, CY:%8)  [WxH] %9 x %10")
+				.arg(box._class)
+				.arg(box._confidence, 0, 'f', 3)
+				.arg(box._x1).arg(box._y1).arg(box._x2).arg(box._y2)
+				.arg(cx).arg(cy)
+				.arg(width).arg(height);
+			_lab_curr_box_info->setText(info);
 		}
 	}
 	QMainWindow::mouseMoveEvent(event);
+}
+
+void LabelV2::onMouseClickedImgLabel(QMouseEvent* event) {
+	if (!_label_state || _curr_frame.empty())	return;
+	auto pt = event->pos();
+	auto img_pt = cvtWidgetPt2ImgPt(_img_label, _curr_frame, pt);
+	if (event->button() == Qt::LeftButton) {
+		if (_label_point.size() == 1) {
+			const auto& pt1 = _label_point[0];
+			int x1 = min(pt1.x(), img_pt.x());
+			int y1 = min(pt1.y(), img_pt.y());
+			int x2 = max(pt1.x(), img_pt.x());
+			int y2 = max(pt1.y(), img_pt.y());
+			Box new_box(_curr_frame_id, x1, y1, x2, y2, _selected_box_class, 1.0f);
+
+			// make sure this vector is cleared
+			_label_point.clear();
+
+			// insert new box into box_list and also the box list view
+			_box_list[_curr_frame_id] << new_box;
+			insertNewBox(new_box);
+		}
+		else _label_point << img_pt;
+	}
+	else if (event->button() == Qt::RightButton) {
+		int index = findNearestBox(img_pt.x(), img_pt.y());
+		if (index == -1)	return;
+		_box_list[_curr_frame_id].remove(index);
+		removeBoxInTreeView(_curr_frame_id, index);
+	}
+	else {}
+
+	drawImg(_curr_frame);
 }
 
 void LabelV2::resetVideoRelatedVar() {
@@ -415,11 +513,14 @@ void LabelV2::resetVideoRelatedVar() {
 	_curr_frame_id = 0;
 	_cap.set(CV_CAP_PROP_POS_MSEC, fid2msec(_curr_frame_id, _fps));
 	_cap >> _curr_frame;
+	_frame_width = _curr_frame.cols;
+	_frame_height = _curr_frame.rows;
 	_is_playing = false;
 	_total_frame_num = _cap.get(CV_CAP_PROP_FRAME_COUNT);
 	_fps = _cap.get(CV_CAP_PROP_FPS);
 
 	_box_list.clear();
+	_box_list.resize(_total_frame_num);
 	_track_list.clear();
 	_event_list.clear();
 	_event_name_index_map.clear();
@@ -428,17 +529,18 @@ void LabelV2::resetVideoRelatedVar() {
 
 	_lab_curr_frame_id->setText(tr("0"));
 	_lab_total_frame_id->setText(QString::number(_total_frame_num));
-	_lab_box_class->setText(tr(" "));
-	_lab_curr_box_confidence->setText(tr(" "));
-	_lab_curr_box_coord->setText(tr(" "));
-	_lab_curr_box_confidence->setText(tr(" "));
+	_lab_box_class->setText(tr("Cls"));
+	_lab_curr_box_info->setText(tr(" "));
 	_lab_on_going_events->setText(tr(" "));
 
 	_btn_open_detection->setEnabled(true);
 	_btn_open_track->setEnabled(true);
 	_btn_open_event->setEnabled(true);
+	_btn_save_label_result->setEnabled(true);
 	_btn_prev_frame->setEnabled(true);
 	_btn_next_frame->setEnabled(true);
+	_btn_prev_frame_with_box->setEnabled(true);
+	_btn_next_frame_with_box->setEnabled(true);
 	_btn_prev_event->setEnabled(true);
 	_btn_next_event->setEnabled(true);
 	_btn_play->setEnabled(true);
@@ -452,6 +554,9 @@ void LabelV2::resetVideoRelatedVar() {
 	_sldr_video_progress->setMaximum(_total_frame_num - 1);
 	_sldr_video_progress->setSliderPosition(0);
 	_sldr_video_progress->setEnabled(true);
+
+	_spin_jump_interval->setValue(1);
+	_jump_interval = 1;
 }
 
 void LabelV2::resetBoxList() {
@@ -635,6 +740,7 @@ void LabelV2::openVideoFile() {
 	}
 
 	QFileInfo video_file_info(video_file);
+	_video_name = video_file_info.baseName();
 	_app_settings.setValue("labelv2/lastvideopath", video_file_info.dir().path());
 
 	_cap = new_cap;
@@ -642,6 +748,31 @@ void LabelV2::openVideoFile() {
 	resetVideoRelatedVar();
 
 	drawImg(_curr_frame);
+}
+
+void LabelV2::saveLabelResult() {
+	if (_is_playing) onBtnPlay();
+	QString last_save_path = _app_settings.value("labelv2/lastsavepath", "C:/").toString();
+	QString str_time = QDateTime::currentDateTime().toString(QString("MM-dd-hh-mm"));
+	QString default_save_name = _video_name + "_" + str_time + ".dtm";
+	QString save_path = QFileDialog::getSaveFileName(this, tr("Save label result"),
+		last_save_path + "/" + default_save_name,
+		"Detection files ( *.data *.dtm )");
+	if (save_path.isEmpty())	return;
+	auto ext = QFileInfo(save_path).suffix();
+	bool ret = false;
+	if (ext == "data") ret = _writeData(save_path, _box_list);
+	else if (ext == "dtm") ret = _writeDtm(save_path, _box_list);
+	else {
+		QMessageBox::warning(this, tr("Error"), tr("Unsupported format"));
+		return;
+	}
+	if (!ret) {
+		QMessageBox::warning(this, tr("Error"), tr("Error saving file"));
+		return;
+	}
+	_app_settings.setValue("labelv2/lastsavepath", QFileInfo(save_path).dir().path());
+	QMessageBox::information(this, tr("Info"), tr("Result has been saved"));
 }
 
 void LabelV2::onBtnPlay() {
@@ -676,10 +807,8 @@ void LabelV2::onBtnStop() {
 
 	_lab_curr_frame_id->setText(tr(" "));
 	_lab_total_frame_id->setText(tr(" "));
-	_lab_box_class->setText(tr(" "));
-	_lab_curr_box_confidence->setText(tr(" "));
-	_lab_curr_box_coord->setText(tr(" "));
-	_lab_curr_box_confidence->setText(tr(" "));
+	_lab_box_class->setText(tr("Cls"));
+	_lab_curr_box_info->setText(tr(" "));
 	_lab_on_going_events->setText(tr(" "));
 
 	_act_open_detection->setEnabled(false);
@@ -689,21 +818,26 @@ void LabelV2::onBtnStop() {
 	_btn_play->setEnabled(false);
 	_btn_next_frame->setEnabled(false);
 	_btn_prev_frame->setEnabled(false);
+	_btn_prev_frame_with_box->setEnabled(true);
+	_btn_next_frame_with_box->setEnabled(true);
 	_btn_next_event->setEnabled(false);
 	_btn_prev_event->setEnabled(false);
 	_btn_stop->setEnabled(false);
 	_btn_open_detection->setEnabled(false);
 	_btn_open_track->setEnabled(false);
 	_btn_open_event->setEnabled(false);
+	_btn_save_label_result->setEnabled(false);
 	
 	_sldr_video_progress->setEnabled(false);
 	_sldr_video_progress->setValue(0);
 }
 
 void LabelV2::onBtnPrevFrame() {
+	if (_label_point.size() == 1)	return;		// disabled when user is drawing box
 	if (_is_playing)	onBtnPlay();
-	if (_curr_frame_id == 0)	return;
-	_cap.set(CV_CAP_PROP_POS_MSEC, fid2msec(--_curr_frame_id, _fps));
+	if (_curr_frame_id < _jump_interval)	return;
+	_curr_frame_id -= _jump_interval;
+	_cap.set(CV_CAP_PROP_POS_MSEC, fid2msec(_curr_frame_id, _fps));
 	_cap >> _curr_frame;
 	_lab_curr_frame_id->setText(QString::number(_curr_frame_id));
 	_sldr_video_progress->setSliderPosition(_curr_frame_id);
@@ -712,9 +846,51 @@ void LabelV2::onBtnPrevFrame() {
 }
 
 void LabelV2::onBtnNextFrame() {
+	if (_label_point.size() == 1)	return;		// disabled when user is drawing box
 	if (_is_playing)	onBtnPlay();
-	if (_curr_frame_id == _total_frame_num - 1)	return;
-	_cap.set(CV_CAP_PROP_POS_MSEC, fid2msec(++_curr_frame_id, _fps));
+	if (_curr_frame_id >= _total_frame_num - _jump_interval)	return;
+	_curr_frame_id += _jump_interval;
+	_cap.set(CV_CAP_PROP_POS_MSEC, fid2msec(_curr_frame_id, _fps));
+	_cap >> _curr_frame;
+	_lab_curr_frame_id->setText(QString::number(_curr_frame_id));
+	_sldr_video_progress->setSliderPosition(_curr_frame_id);
+	drawImg(_curr_frame);
+	findOnGoingEvent();
+}
+
+void LabelV2::onBtnPrevFrameWithBox() {
+	if (_label_point.size() == 1)	return;		// disabled when user is drawing box
+	if (_is_playing)	onBtnPlay();
+	int found_fid = _curr_frame_id - 1;
+	bool found = false;
+	while (!found && found_fid >= 0) {
+		if (_box_list[found_fid].size() > 0)
+			found = true;
+		else --found_fid;
+	}
+	if (!found)	return;
+	_curr_frame_id = found_fid;
+	_cap.set(CV_CAP_PROP_POS_MSEC, fid2msec(_curr_frame_id, _fps));
+	_cap >> _curr_frame;
+	_lab_curr_frame_id->setText(QString::number(_curr_frame_id));
+	_sldr_video_progress->setSliderPosition(_curr_frame_id);
+	drawImg(_curr_frame);
+	findOnGoingEvent();
+}
+
+void LabelV2::onBtnNextFrameWithBox() {
+	if (_label_point.size() == 1)	return;		// disabled when user is drawing box
+	if (_is_playing)	onBtnPlay();
+	int found_fid = _curr_frame_id + 1;
+	bool found = false;
+	while (!found && found_fid < _total_frame_num) {
+		if (_box_list[found_fid].size() > 0)
+			found = true;
+		else ++found_fid;
+	}
+	if (!found)	return;
+	_curr_frame_id = found_fid;
+	_cap.set(CV_CAP_PROP_POS_MSEC, fid2msec(_curr_frame_id, _fps));
 	_cap >> _curr_frame;
 	_lab_curr_frame_id->setText(QString::number(_curr_frame_id));
 	_sldr_video_progress->setSliderPosition(_curr_frame_id);
@@ -723,6 +899,7 @@ void LabelV2::onBtnNextFrame() {
 }
 
 void LabelV2::onBtnPrevEvent() {
+	if (_label_point.size() == 1)	return;		// disabled when user is drawing box
 	if (_is_playing)	onBtnPlay();
 	int max_start_fid = INT_MIN;
 	for (auto it = _event_name_index_map.begin(); it != _event_name_index_map.end(); ++it) {
@@ -743,6 +920,7 @@ void LabelV2::onBtnPrevEvent() {
 }
 
 void LabelV2::onBtnNextEvent() {
+	if (_label_point.size() == 1)	return;		// disabled when user is drawing box
 	if (_is_playing)	onBtnPlay();
 	int min_start_fid = INT_MAX;
 	for (auto it = _event_name_index_map.begin(); it != _event_name_index_map.end(); ++it) {
@@ -771,6 +949,10 @@ void LabelV2::onChangingBoxClass(int cls) {
 	_selected_box_class = cls;
 }
 
+void LabelV2::onChangingJumpInterval(int interval) {
+	_jump_interval = interval;
+}
+
 void LabelV2::onCheckShowDetectionResult(int state) {
 	_show_detection_result = state == Qt::Checked;
 	drawImg(_curr_frame);
@@ -781,7 +963,21 @@ void LabelV2::onCheckShowTracks(int state) {
 	drawImg(_curr_frame);
 }
 
+void LabelV2::onCheckLabelState(int state) {
+	_label_state = state == Qt::Checked;
+	if (_label_state) {
+		if (_is_playing) onBtnPlay();
+		_btn_play->setEnabled(false);
+	}
+	else {
+		_btn_play->setEnabled(true);
+		_label_point.clear();
+	}
+	drawImg(_curr_frame);
+}
+
 void LabelV2::onDoubleClickedBoxPerFrameList(const QModelIndex& index) {
+	if (_label_point.size() == 1)	return;		// disabled when user is drawing box
 	if (index == QModelIndex())	return;
 	const QModelIndex* frame_row = &index;
 	int box_ind = -1;
@@ -802,6 +998,7 @@ void LabelV2::onDoubleClickedBoxPerFrameList(const QModelIndex& index) {
 }
 
 void LabelV2::onDoubleClickedEventList(const QModelIndex& index) {
+	if (_label_point.size() == 1)	return;		// disabled when user is drawing box
 	if (index == QModelIndex() || index.parent() == QModelIndex())	return;
 	int event_ind = index.row();
 	int event_parent_ind = index.parent().row();
@@ -818,6 +1015,7 @@ void LabelV2::onClikedEventList(const QModelIndex& index) {
 }
 
 void LabelV2::onDoubleClickedTrackList(const QModelIndex& index) {
+	if (_label_point.size() == 1)	return;		// disabled when user is drawing box
 	if (index == QModelIndex())	return;
 	int track_ind = index.row();
 	auto& selected_track = _track_list[track_ind];
@@ -844,21 +1042,23 @@ void LabelV2::playOneFrame() {
 	findOnGoingEvent();
 }
 
-const Box* LabelV2::findNearestBox(int x, int y) const {
-	if (_box_list.empty() || !_show_detection_result ||  _is_playing || _box_list[_curr_frame_id].empty())	return nullptr;
+int LabelV2::findNearestBox(int x, int y) const {
+	if (_box_list.empty() || !_show_detection_result ||  _is_playing || _box_list[_curr_frame_id].empty())	return -1;
 	int dx, dy, d, min_d(INT_MAX), cx, cy;
-	const Box* pbox = nullptr;
-	for (const auto& box : _box_list[_curr_frame_id]) {
+	int index = -1, i = 0;
+	const auto list = _box_list[_curr_frame_id];
+	for (int i = 0; i < list.size(); ++i) {
+		const auto& box = list[i];
 		if (x<box._x1 || x>box._x2 || y < box._y1 || y>box._y2 || box._confidence < _detection_confidence_threshold)	continue;
 		cx = (box._x1 + box._x2) >> 1, cy = (box._y1 + box._y2) >> 1;
 		dx = std::abs(x - cx), dy = std::abs(y - cy);
 		d = dx * dx + dy * dy;
 		if (d < min_d) {
 			min_d = d;
-			pbox = &box;
+			index = i;
 		}
 	}
-	return pbox;
+	return index;
 }
 
 void LabelV2::findOnGoingEvent() {

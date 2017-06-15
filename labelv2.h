@@ -42,10 +42,11 @@ private:
 
 protected:
 	QPointF cvtWidgetPt2ImgPt(const QWidget* w, const cv::Mat& m, const QPointF& pt);
-	void drawImg(cv::Mat& img);
+	void drawImg(cv::Mat& img, QPointF* cursor = nullptr);
 	void drawBoxes(cv::Mat& img);
 	void drawTracks(cv::Mat& img);
-	const Box* findNearestBox(int x, int y) const;
+	void drawGuideLines(cv::Mat& img, QPointF* cursor);
+	int findNearestBox(int x, int y) const;
 	void findOnGoingEvent();
 	void jumpToFrame(int fid);
 	void readSettings();
@@ -71,22 +72,28 @@ private slots:
 	void onBtnStop();
 	void onBtnPrevFrame();
 	void onBtnNextFrame();
+	void onBtnPrevFrameWithBox();
+	void onBtnNextFrameWithBox();
 	void onBtnPrevEvent();
 	void onBtnNextEvent();
 	void onChangingDetectionConfidenceThreshold(double);
 	void onChangingBoxClass(int);
+	void onChangingJumpInterval(int);
 	void onClikedEventList(const QModelIndex&);
 	void openDetectionFile();
 	void onDoubleClickedBoxPerFrameList(const QModelIndex&);
 	void onDoubleClickedEventList(const QModelIndex&);
 	void onDoubleClickedTrackList(const QModelIndex&);
+	void onMouseClickedImgLabel(QMouseEvent*);
 	void openEventFile();
 	void openTrackFile();
 	void openVideoFile();
+	void onCheckLabelState(int);
 	void onCheckShowDetectionResult(int);
 	void onCheckShowTracks(int);
 	void playOneFrame();
 	void removeBoxInTreeView(int&, int&);
+	void saveLabelResult();
 
 private:
 	QSettings _app_settings;
@@ -103,17 +110,24 @@ private:
 	QString _video_file;
 	QString _detection_file;
 	QString _track_file;
+	QString _video_name;
 
 	cv::VideoCapture _cap;
 	int _curr_frame_id;
 	int _total_frame_num;
 	int _fps;
+	int _jump_interval;
+	int _frame_width;
+	int _frame_height;
 	cv::Mat _curr_frame;
 	double _detection_confidence_threshold;
 	int _selected_box_class;
 	bool _show_detection_result;
 	bool _show_tracks;
+	bool _label_state;
 	bool _is_playing;
+
+	QVector<QPointF> _label_point;
 
 	QVector<QVector<Box>> _box_list;
 	QVector<Track> _track_list;
@@ -126,13 +140,17 @@ private:
 	QAction* _act_open_detection;
 	QAction* _act_open_track;
 	QAction* _act_open_event;
+	QAction* _act_save_result;
 
 	QPushButton* _btn_open_video;
 	QPushButton* _btn_open_detection;
 	QPushButton* _btn_open_event;
 	QPushButton* _btn_open_track;
+	QPushButton* _btn_save_label_result;
 	QPushButton* _btn_next_frame;
 	QPushButton* _btn_prev_frame;
+	QPushButton* _btn_next_frame_with_box;
+	QPushButton* _btn_prev_frame_with_box;
 	QPushButton* _btn_next_event;
 	QPushButton* _btn_prev_event;
 	QPushButton* _btn_play;
@@ -150,8 +168,10 @@ private:
 
 	QCheckBox* _chk_show_detection_result;
 	QCheckBox* _chk_show_tracks;
+	QCheckBox* _chk_label_state;
 
 	QSpinBox* _spin_box_class;
+	QSpinBox* _spin_jump_interval;
 	QDoubleSpinBox* _spin_detection_confidence_threshold;
 
 	QSlider* _sldr_video_progress;
@@ -159,14 +179,13 @@ private:
 	QLabel* _lab_curr_frame_id;
 	QLabel* _lab_total_frame_id;
 
-	QLabel* _lab_curr_box_confidence;
-	QLabel* _lab_curr_box_coord;
-	QLabel* _lab_curr_box_class;
+	QLabel* _lab_curr_box_info;
 
 	QLabel* _lab_on_going_events;
 
 	QLabel* _lab_box_class;
 	QLabel* _lab_detction_confidence_threshold;
+	QLabel* _lab_jump_interval;
 
 	QLabel* _lab_box_list;
 	QLabel* _lab_track_list;

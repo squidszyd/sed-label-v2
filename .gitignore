@@ -1,10 +1,7 @@
 Debug
-GeneratedFiles
 Release
 Resources
 *.vcxproj
 *.vcxproj.filters
 *.vcxproj.user
-*.ui
-*.qrc
 *.props

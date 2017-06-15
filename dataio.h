@@ -6,6 +6,7 @@
 #include <string>
 #include <sstream>
 using std::ifstream;
+using std::ofstream;
 using std::string;
 using std::stringstream;
 
@@ -46,7 +47,6 @@ bool _readData(const QString& path, QVector<QVector<Box>>& box_list, float conf_
 }
 
 bool _readDtm(const QString& path, QVector<QVector<Box>>& box_list) {
-	return false;
 	box_list.clear();
 	ifstream ifs(path.toStdString(), std::ios::binary);
 	if (!ifs.is_open())
@@ -70,6 +70,57 @@ bool _readDtm(const QString& path, QVector<QVector<Box>>& box_list) {
 		return false;
 	}
 	ifs.close();
+	return true;
+}
+
+bool _writeData(const QString& path, const QVector<QVector<Box>>& box_list) {
+	ofstream ofs(path.toStdString(), std::ios::binary);
+	if (!ofs.is_open())
+		return false;
+	int num;
+	try {
+		for (int fid = 0; fid < box_list.size(); ++fid) {
+			const auto box_per_frame = box_list[fid];
+			num = box_per_frame.size();
+			ofs.write((char*)&fid, sizeof(int));
+			ofs.write((char*)&num, sizeof(int));
+			for (const auto& box : box_per_frame) {
+				ofs.write((char*)&box._x1, sizeof(int));
+				ofs.write((char*)&box._y1, sizeof(int));
+				ofs.write((char*)&box._x2, sizeof(int));
+				ofs.write((char*)&box._y2, sizeof(int));
+				ofs.write((char*)&box._confidence, sizeof(float));
+			}
+		}
+	}
+	catch (...) {
+		return false;
+	}
+	ofs.close();
+	return true;
+}
+
+bool _writeDtm(const QString& path, const QVector<QVector<Box>>& box_list) {
+	ofstream ofs(path.toStdString(), std::ios::binary);
+	if (!ofs.is_open())
+		return false;
+	try {
+		for (const auto& box_per_frame : box_list) {
+			for (const auto& box : box_per_frame) {
+				ofs.write((char*)&box._fid, sizeof(int));
+				ofs.write((char*)&box._confidence, sizeof(float));
+				ofs.write((char*)&box._class, sizeof(int));
+				ofs.write((char*)&box._x1, sizeof(int));
+				ofs.write((char*)&box._y1, sizeof(int));
+				ofs.write((char*)&box._x2, sizeof(int));
+				ofs.write((char*)&box._y2, sizeof(int));
+			}
+		}
+	}
+	catch (...) {
+		return false;
+	}
+	ofs.close();
 	return true;
 }
 
